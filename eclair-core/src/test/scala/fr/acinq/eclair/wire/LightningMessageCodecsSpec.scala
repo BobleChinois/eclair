@@ -60,6 +60,38 @@ class LightningMessageCodecsSpec extends FunSuite {
     }
   }
 
+  test("encode/decode with varint codec") {
+    val expected = Map(
+      0L -> hex"00",
+      42L -> hex"2a",
+      550L -> hex"fd 26 02",
+      998000L -> hex"fe 70 3a 0f 00",
+      1311768467294899695L -> hex"ff 12 34 56 78 90 ab cd ef"
+    ).mapValues(_.toBitVector)
+
+    for ((long, ref) <- expected) {
+      val encoded = varIntCodec.encode(long).require
+      assert(ref === encoded)
+      val decoded = varIntCodec.decode(encoded).require.value
+      assert(long === decoded)
+    }
+  }
+
+  test("decode invalid varint") {
+    val testCases = Seq(
+      hex"fd",
+      hex"fe 01",
+      hex"fe",
+      hex"fe 12 34",
+      hex"ff",
+      hex"ff 12 34 56 78"
+    ).map(_.toBitVector)
+
+    for (testCase <- testCases) {
+      assert(varIntCodec.decode(testCase).isFailure)
+    }
+  }
+
   test("encode/decode with rgb codec") {
     val color = Color(47.toByte, 255.toByte, 142.toByte)
     val bin = rgb.encode(color).require

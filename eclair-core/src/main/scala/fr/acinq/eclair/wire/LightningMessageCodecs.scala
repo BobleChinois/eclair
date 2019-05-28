@@ -49,6 +49,47 @@ object LightningMessageCodecs {
 
   val uint64ex: Codec[UInt64] = bytes(8).xmap(b => UInt64(b), a => a.toByteVector.padLeft(8))
 
+  // bitcoin style varint codec
+  val varIntCodec = Codec[Long](
+    (n: Long) =>
+      n match {
+        case i if i < 0xfd =>
+          uint8L.encode(i.toInt)
+        case i if i < 0xffff =>
+          for {
+            a <- uint8L.encode(0xfd)
+            b <- uint16L.encode(i.toInt)
+          } yield a ++ b
+        case i if i < 0xffffffffL =>
+          for {
+            a <- uint8L.encode(0xfe)
+            b <- uint32L.encode(i)
+          } yield a ++ b
+        case i =>
+          for {
+            a <- uint8L.encode(0xff)
+            b <- uint64.encode(i)
+          } yield a ++ b
+      },
+    (buf: BitVector) => {
+      uint8L.decode(buf) match {
+        case scodec.Attempt.Successful(byte) =>
+          byte.value match {
+            case 0xff =>
+              uint64.decode(byte.remainder)
+            case 0xfe =>
+              uint32L.decode(byte.remainder)
+            case 0xfd =>
+              uint16L.decode(byte.remainder)
+                .map(b => b.map(_.toLong))
+            case _ =>
+              scodec.Attempt.Successful(scodec.DecodeResult(byte.value.toLong, byte.remainder))
+          }
+        case scodec.Attempt.Failure(err) =>
+          scodec.Attempt.Failure(err)
+      }
+    })
+
   def bytes32: Codec[ByteVector32] = limitedSizeBytes(32, bytesStrict(32).xmap(d => ByteVector32(d), d => d.bytes))
 
   def varsizebinarydata: Codec[ByteVector] = variableSizeBytes(uint16, bytes)
