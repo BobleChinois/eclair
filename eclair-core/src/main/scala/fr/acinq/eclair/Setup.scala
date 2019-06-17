@@ -122,7 +122,7 @@ class Setup(datadir: File,
       val future = for {
         json <- bitcoinClient.invoke("getblockchaininfo").recover { case _ => throw BitcoinRPCConnectionException }
         // Make sure wallet support is enabled in bitcoind.
-        _ <- bitcoinClient.invoke("getbalance").recover { case _ => throw BitcoinWalletDisabledException }
+        _ <- bitcoinClient.invoke("-rpcwallet=","getbalance").recover { case _ => throw BitcoinWalletDisabledException }
         progress = (json \ "verificationprogress").extract[Double]
         blocks = (json \ "blocks").extract[Long]
         headers = (json \ "headers").extract[Long]
